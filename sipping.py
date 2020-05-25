@@ -391,12 +391,16 @@ def main():
         sent = rcvd = 0
 
         try:
+            delay = []
             for req in gen_request(template_vars, options):
                 try:
                     sip_req = Request(req)
                     # Add Content-Lenght if missing
                     if "content-length" not in sip_req.headers:
                         sip_req.headers["content-length"] = len(sip_req.body)
+
+                    if not options.aggressive:
+                        startTime = time.time()
 
                     try:
                         sock.sendto(str(sip_req), (options.dest_ip, options.dest_port))
@@ -418,6 +422,8 @@ def main():
                                 buf = sock.recvfrom(0xffff)
                                 print_reply(buf, template_vars, options.out_regex, options.out_replace, verbose=options.verbose, quiet=options.quiet)
                                 rcvd += 1
+                                endTime = time.time()
+                                delay.append(endTime - startTime)
 
                 except socket.timeout:
                     pass
@@ -425,9 +431,14 @@ def main():
         except KeyboardInterrupt:
             pass
 
+        finally:
+            if options.aggressive or not rcvd:
+                latency = '-'
+            else:
+                latency = round(float(sum(delay))/len(delay) * 1000, 2)
         if not options.quiet:
             sys.stderr.write('\n--- statistics ---\n')
-            sys.stderr.write('%d packets transmitted, %d packets received, %.1f%% packet loss\n' % (sent, rcvd, (float(sent - rcvd) / sent) * 100))
+            sys.stderr.write('%d packets transmitted, %d packets received, %.1f%% packet loss, %s ms avg latency\n' % (sent, rcvd, (float(sent - rcvd) / sent) * 100, latency))
 
 
 if __name__ == '__main__':
